@@ -38,27 +38,60 @@
         function App() {
             const [user, setUser] = useState(null);
             const [gameState, setGameState] = useState({ nomeTreinador: "Mister", mes: 1 });
+            const [loading, setLoading] = useState(true);
 
             useEffect(() => {
-                signInAnonymously(auth);
-                const unsubscribe = onAuthStateChanged(auth, setUser);
+                const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                    if (currentUser) {
+                        setUser(currentUser);
+                    } else {
+                        try {
+                            await signInAnonymously(auth);
+                        } catch (err) {
+                            console.error("Erro ao autenticar:", err);
+                        }
+                    }
+                });
                 return () => unsubscribe();
             }, []);
 
             useEffect(() => {
                 if (!user) return;
+                
                 const loadSave = async () => {
-                    const docRef = doc(db, 'saves', user.uid);
-                    const snap = await getDoc(docRef);
-                    if (snap.exists()) setGameState(snap.data());
+                    try {
+                        const docRef = doc(db, 'saves', user.uid);
+                        const snap = await getDoc(docRef);
+                        if (snap.exists()) {
+                            setGameState(snap.data());
+                        }
+                    } catch (err) {
+                        console.error("Erro ao carregar dados:", err);
+                    } finally {
+                        setLoading(false);
+                    }
                 };
                 loadSave();
             }, [user]);
 
             const salvar = async (novoEstado) => {
                 setGameState(novoEstado);
-                if (user) await setDoc(doc(db, 'saves', user.uid), novoEstado);
+                if (user) {
+                    try {
+                        await setDoc(doc(db, 'saves', user.uid), novoEstado);
+                    } catch (err) {
+                        console.error("Erro ao salvar progresso:", err);
+                    }
+                }
             };
+
+            if (loading) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen text-yellow-400 font-bold">
+                        Carregando escalação tática...
+                    </div>
+                );
+            }
 
             return (
                 <div className="max-w-md mx-auto bg-gray-800 min-h-screen p-4 text-white font-mono shadow-2xl">
