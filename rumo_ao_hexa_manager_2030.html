@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rumo ao Hexa Manager 2030</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel (Para rodar JSX direto no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        const { useState, useEffect } = React;
+
+        // --- FIREBASE SETUP ---
+        // ATENÇÃO: Se você hospedar este HTML fora deste ambiente (ex: Netlify), 
+        // substitua as chaves abaixo pelas credenciais do seu projeto Firebase!
+        let firebaseConfig = {};
+        if (typeof __firebase_config !== 'undefined') {
+            firebaseConfig = JSON.parse(__firebase_config);
+        } else {
+            // COLOQUE SUAS CHAVES AQUI PARA HOSPEDAR EXTERNAMENTE
+            firebaseConfig = {
+                apiKey: "COLOQUE_SUA_API_KEY_AQUI",
+                authDomain: "seu-projeto.firebaseapp.com",
+                projectId: "seu-projeto",
+                storageBucket: "seu-projeto.appspot.com",
+                messagingSenderId: "123456789",
+                appId: "1:123456789:web:abcdef"
+            };
+        }
+        
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Erro ao inicializar Firebase. Verifique as configurações.", e);
+        }
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'rumo-ao-hexa-default';
+
+        // --- MOCK DATA: JOGADORES BASE (Em 2026) ---
+        const JOGADORES_BASE = [
+          { id: 'j1', nome: 'Alisson', pos: 'GOL', idade: 33, ovr: 88, potencial: 85 },
+          { id: 'j2', nome: 'Ederson', pos: 'GOL', idade: 32, ovr: 87, potencial: 85 },
+          { id: 'j3', nome: 'Bento', pos: 'GOL', idade: 27, ovr: 82, potencial: 86 },
+          { id: 'j4', nome: 'Marquinhos', pos: 'ZAG', idade: 32, ovr: 87, potencial: 84 },
+          { id: 'j5', nome: 'Militão', pos: 'ZAG', idade: 28, ovr: 86, potencial: 87 },
+          { id: 'j6', nome: 'Bremer', pos: 'ZAG', idade: 29, ovr: 84, potencial: 85 },
+          { id: 'j7', nome: 'Beraldo', pos: 'ZAG', idade: 22, ovr: 80, potencial: 89 },
+          { id: 'j8', nome: 'Danilo', pos: 'LAT', idade: 34, ovr: 82, potencial: 78 },
+          { id: 'j9', nome: 'Yan Couto', pos: 'LAT', idade: 24, ovr: 81, potencial: 87 },
+          { id: 'j10', nome: 'Arana', pos: 'LAT', idade: 29, ovr: 81, potencial: 81 },
+          { id: 'j11', nome: 'Casemiro', pos: 'MEI', idade: 34, ovr: 86, potencial: 80 },
+          { id: 'j12', nome: 'B. Guimarães', pos: 'MEI', idade: 28, ovr: 86, potencial: 88 },
+          { id: 'j13', nome: 'Paquetá', pos: 'MEI', idade: 28, ovr: 85, potencial: 86 },
+          { id: 'j14', nome: 'João Gomes', pos: 'MEI', idade: 25, ovr: 82, potencial: 87 },
+          { id: 'j15', nome: 'André', pos: 'MEI', idade: 24, ovr: 82, potencial: 88 },
+          { id: 'j16', nome: 'Vini Jr', pos: 'ATA', idade: 25, ovr: 91, potencial: 93 },
+          { id: 'j17', nome: 'Rodrygo', pos: 'ATA', idade: 25, ovr: 87, potencial: 90 },
+          { id: 'j18', nome: 'Raphinha', pos: 'ATA', idade: 29, ovr: 85, potencial: 84 },
+          { id: 'j19', nome: 'Endrick', pos: 'ATA', idade: 19, ovr: 81, potencial: 94 },
+          { id: 'j20', nome: 'Richarlison', pos: 'ATA', idade: 29, ovr: 82, potencial: 81 },
+          { id: 'j21', nome: 'Vitor Roque', pos: 'ATA', idade: 21, ovr: 79, potencial: 89 },
+          { id: 'j22', nome: 'Savinho', pos: 'ATA', idade: 22, ovr: 81, potencial: 88 },
+          { id: 'j23', nome: 'Estêvão', pos: 'ATA', idade: 19, ovr: 77, potencial: 95 }
+        ];
+
+        // --- BANCO MUNDIAL DO OLHEIRO ---
+        const BANCO_DE_DADOS_MUNDIAL = [
+          { nome: 'Neymar', pos: 'ATA', idade: 34, ovr: 88, potencial: 88 },
+          { nome: 'Gabriel Martinelli', pos: 'ATA', idade: 25, ovr: 85, potencial: 88 },
+          { nome: 'Gabriel Jesus', pos: 'ATA', idade: 29, ovr: 83, potencial: 83 },
+          { nome: 'Douglas Luiz', pos: 'MEI', idade: 28, ovr: 84, potencial: 85 },
+          { nome: 'João Pedro', pos: 'ATA', idade: 24, ovr: 83, potencial: 88 },
+          { nome: 'PH', pos: 'LAT', idade: 29, ovr: 78, potencial: 78 },
+          { nome: 'Murillo', pos: 'ZAG', idade: 24, ovr: 82, potencial: 87 },
+          { nome: 'Vanderson', pos: 'LAT', idade: 25, ovr: 81, potencial: 85 },
+          { nome: 'Pedro', pos: 'ATA', idade: 29, ovr: 83, potencial: 83 },
+          { nome: 'Gerson', pos: 'MEI', idade: 29, ovr: 82, potencial: 82 },
+          { nome: 'Raphael Veiga', pos: 'MEI', idade: 31, ovr: 81, potencial: 81 },
+          { nome: 'Léo Ortiz', pos: 'ZAG', idade: 30, ovr: 80, potencial: 80 },
+          { nome: 'Léo Jardim', pos: 'GOL', idade: 31, ovr: 80, potencial: 80 },
+          { nome: 'Samuel Lino', pos: 'LAT', idade: 26, ovr: 81, potencial: 84 },
+          { nome: 'Carlos Augusto', pos: 'LAT', idade: 27, ovr: 81, potencial: 83 },
+          { nome: 'Andreas Pereira', pos: 'MEI', idade: 30, ovr: 81, potencial: 81 },
+          { nome: 'Evanilson', pos: 'ATA', idade: 26, ovr: 81, potencial: 84 },
+          { nome: 'Marcos Leonardo', pos: 'ATA', idade: 23, ovr: 78, potencial: 85 },
+          { nome: 'Lucas Moura', pos: 'ATA', idade: 33, ovr: 80, potencial: 80 },
+          { nome: 'Galoppo', pos: 'MEI', idade: 27, ovr: 78, potencial: 80 },
+          { nome: 'Wesley', pos: 'ATA', idade: 21, ovr: 77, potencial: 86 }
+        ];
+
+        const ADVERSARIOS = [
+          { nome: 'Argentina', ovr: 88, tipo: 'Rival' },
+          { nome: 'França', ovr: 90, tipo: 'Pedreira' },
+          { nome: 'Inglaterra', ovr: 87, tipo: 'Pedreira' },
+          { nome: 'Noruega', ovr: 82, tipo: 'Fantasma de 2026' },
+          { nome: 'Chile', ovr: 76, tipo: 'Eliminatórias' },
+          { nome: 'Bolívia', ovr: 70, tipo: 'Eliminatórias' },
+          { nome: 'Colômbia', ovr: 83, tipo: 'Eliminatórias' },
+          { nome: 'Uruguai', ovr: 84, tipo: 'Rival' },
+          { nome: 'Espanha', ovr: 87, tipo: 'Pedreira' },
+          { nome: 'Portugal', ovr: 86, tipo: 'Amistoso' }
+        ];
+
+        const ESTADO_INICIAL = {
+          ano: 2026,
+          mes: 8,
+          reputacao: 50,
+          jogadores: JOGADORES_BASE,
+          convocados: [],
+          historico: [],
+          nomeTreinador: ''
+        };
+
+        function App() {
+          const [user, setUser] = useState(null);
+          const [loadingAuth, setLoadingAuth] = useState(true);
+          const [loadingGame, setLoadingGame] = useState(false);
+          const [gameState, setGameState] = useState(null);
+          const [firebaseError, setFirebaseError] = useState(false);
+          
+          const [telaAtual, setTelaAtual] = useState('intro');
+          const [proximoAdversario, setProximoAdversario] = useState(null);
+          const [resultadoPartida, setResultadoPartida] = useState(null);
+          const [modalAviso, setModalAviso] = useState(null);
+
+          const [termoBusca, setTermoBusca] = useState('');
+          const [resultadosOlheiro, setResultadosOlheiro] = useState([]);
+          const [mensagemOlheiro, setMensagemOlheiro] = useState('');
+
+          useEffect(() => {
+            if (!auth) {
+                setFirebaseError(true);
+                setLoadingAuth(false);
+                return;
+            }
+            const initAuth = async () => {
+              try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                  await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                  await signInAnonymously(auth);
+                }
+              } catch (error) {
+                console.error("Erro de Autenticação:", error);
+                setFirebaseError(true);
+              }
+            };
+            initAuth();
+
+            const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+              if (currentUser) {
+                  setUser(currentUser);
+              }
+              setLoadingAuth(false);
+            });
+            return () => unsubscribe();
+          }, []);
+
+          useEffect(() => {
+            if (!user || !db) return;
+            
+            const loadGame = async () => {
+              setLoadingGame(true);
+              const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'saves', 'save1');
+              try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                  setGameState(docSnap.data());
+                  setTelaAtual('hub');
+                } else {
+                  setTelaAtual('intro');
+                }
+              } catch (err) {
+                console.error("Erro ao carregar:", err);
+              }
+              setLoadingGame(false);
+            };
+            
+            loadGame();
+          }, [user]);
+
+          const salvarJogo = async (newState) => {
+            if (!user || !db) return;
+            setGameState(newState);
+            try {
+              const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'saves', 'save1');
+              await setDoc(docRef, newState);
+            } catch (err) {
+              console.error("Erro ao salvar:", err);
+            }
+          };
+
+          const iniciarNovoJogo = (nome) => {
+            if (!nome) return;
+            const novoEstado = { ...ESTADO_INICIAL, nomeTreinador: nome };
+            salvarJogo(novoEstado);
+            setTelaAtual('hub');
+            setModalAviso(null);
+          };
+
+          const alternarConvocacao = (jogadorId) => {
+            let novosConvocados = [...gameState.convocados];
+            if (novosConvocados.includes(jogadorId)) {
+              novosConvocados = novosConvocados.filter(id => id !== jogadorId);
+            } else {
+              if (novosConvocados.length < 23) {
+                novosConvocados.push(jogadorId);
+              }
+            }
+            salvarJogo({ ...gameState, convocados: novosConvocados });
+          };
+
+          const buscarJogador = (e) => {
+            e.preventDefault();
+            if (!termoBusca.trim()) return;
+
+            setMensagemOlheiro('');
+            const termoLower = termoBusca.toLowerCase();
+
+            const encontradosReais = BANCO_DE_DADOS_MUNDIAL.filter(j => 
+              j.nome.toLowerCase().includes(termoLower)
+            );
+
+            const idsJáNoElenco = gameState.jogadores.map(j => j.id || j.nome);
+            let resultadosFinais = encontradosReais.filter(j => !idsJáNoElenco.includes(j.nome));
+
+            if (resultadosFinais.length === 0) {
+              const posicoes = ['ZAG', 'LAT', 'MEI', 'ATA'];
+              
+              const criarFicticio = (tipo) => {
+                let idade, ovr, pot, pos;
+                pos = posicoes[Math.floor(Math.random() * posicoes.length)];
+                
+                if (tipo === 'promessa') {
+                  idade = 17 + Math.floor(Math.random() * 4);
+                  ovr = 72 + Math.floor(Math.random() * 5);
+                  pot = 85 + Math.floor(Math.random() * 10);
+                } else if (tipo === 'auge') {
+                  idade = 24 + Math.floor(Math.random() * 5);
+                  ovr = 79 + Math.floor(Math.random() * 6);
+                  pot = ovr + Math.floor(Math.random() * 4);
+                } else {
+                  idade = 31 + Math.floor(Math.random() * 5);
+                  ovr = 76 + Math.floor(Math.random() * 6);
+                  pot = ovr;
+                }
+
+                return {
+                  id: `gen_${Date.now()}_${Math.random()}`,
+                  nome: termoBusca.charAt(0).toUpperCase() + termoBusca.slice(1),
+                  pos, idade, ovr, potencial: pot,
+                  gerado: tipo
+                };
+              };
+
+              resultadosFinais = [
+                criarFicticio('promessa'),
+                criarFicticio('auge'),
+                criarFicticio('veterano')
+              ];
+              setMensagemOlheiro(`Não encontramos dados oficiais exatos para "${termoBusca}", mas o olheiro mapeou perfis parecidos com esse nome no mercado. Escolha quem você deseja focar:`);
+            } else {
+              setMensagemOlheiro(`O olheiro encontrou registros correspondentes no nosso banco de dados mundial!`);
+            }
+
+            setResultadosOlheiro(resultadosFinais);
+          };
+
+          const adicionarAoElenco = (jogador) => {
+            const novoJogador = { ...jogador, id: jogador.id || `real_${Date.now()}_${Math.random()}` };
+            const novosJogadores = [...gameState.jogadores, novoJogador];
+            
+            salvarJogo({ ...gameState, jogadores: novosJogadores });
+            
+            setResultadosOlheiro(prev => prev.filter(j => j.nome !== jogador.nome || j.gerado !== jogador.gerado));
+            setMensagemOlheiro(`✅ ${jogador.nome} foi adicionado à base de monitoramento da CBF e já pode ser convocado!`);
+          };
+
+          const avanarMes = () => {
+            let novoMes = gameState.mes + 1;
+            let novoAno = gameState.ano;
+            let novosJogadores = [...gameState.jogadores];
+
+            if (novoMes > 12) {
+              novoMes = 1;
+              novoAno++;
+              novosJogadores = novosJogadores.map(j => {
+                let nvIdade = j.idade + 1;
+                let nvOvr = j.ovr;
+                if (nvIdade <= 26 && nvOvr < j.potencial) nvOvr += Math.floor(Math.random() * 3);
+                if (nvIdade > 32) nvOvr -= Math.floor(Math.random() * 2);
+                return { ...j, idade: nvIdade, ovr: Math.max(40, nvOvr) };
+              });
+            }
+
+            if (novoMes % 2 === 0) {
+              const adv = ADVERSARIOS[Math.floor(Math.random() * ADVERSARIOS.length)];
+              setProximoAdversario(adv);
+              setTelaAtual('partida');
+            }
+
+            salvarJogo({ ...gameState, mes: novoMes, ano: novoAno, jogadores: novosJogadores });
+            
+            if (novoAno === 2030 && novoMes === 6) {
+              setModalAviso("🏆 CHEGOU A HORA! Copa do Mundo de 2030. É matar ou morrer pelo Hexa!");
+            }
+          };
+
+          const simularPartida = () => {
+            if (gameState.convocados.length < 11) {
+              setResultadoPartida({ erro: "Mister, você precisa convocar pelo menos 11 jogadores!" });
+              return;
+            }
+
+            const timeConvocado = gameState.jogadores
+              .filter(j => gameState.convocados.includes(j.id))
+              .sort((a, b) => b.ovr - a.ovr);
+            
+            const forcaTop11 = timeConvocado.slice(0, 11).reduce((acc, j) => acc + j.ovr, 0) / 11;
+            const forcaAdversario = proximoAdversario.ovr;
+
+            const pesoBrasil = forcaTop11 + Math.random() * 15;
+            const pesoAdversario = forcaAdversario + Math.random() * 15;
+
+            let golsBrasil = 0;
+            let golsAdv = 0;
+
+            if (pesoBrasil > pesoAdversario + 10) golsBrasil = Math.floor(Math.random() * 4) + 1;
+            else if (pesoBrasil > pesoAdversario) { golsBrasil = Math.floor(Math.random() * 3); golsAdv = Math.floor(Math.random() * 2); }
+            else if (pesoAdversario > pesoBrasil + 10) golsAdv = Math.floor(Math.random() * 4) + 1;
+            else { golsBrasil = Math.floor(Math.random() * 2); golsAdv = Math.floor(Math.random() * 3); }
+
+            const vitoria = golsBrasil > golsAdv;
+            const empate = golsBrasil === golsAdv;
+            
+            let deltaReputacao = vitoria ? 5 : empate ? 0 : -8;
+            if (vitoria && proximoAdversario.tipo === 'Fantasma de 2026') deltaReputacao += 10;
+            if (!vitoria && proximoAdversario.nome === 'Bolívia') deltaReputacao -= 5;
+
+            const novaRep = Math.min(100, Math.max(0, gameState.reputacao + deltaReputacao));
+
+            const historicoMatch = {
+              data: `${gameState.mes}/${gameState.ano}`,
+              adversario: proximoAdversario.nome,
+              golsBr: golsBrasil,
+              golsAdv: golsAdv,
+              resultado: vitoria ? 'V' : empate ? 'E' : 'D'
+            };
+
+            setResultadoPartida({ golsBrasil, golsAdv, deltaReputacao });
+            salvarJogo({ 
+              ...gameState, 
+              reputacao: novaRep,
+              historico: [historicoMatch, ...gameState.historico].slice(0, 20)
+            });
+          };
+
+          const voltarAoHub = () => {
+            setProximoAdversario(null);
+            setResultadoPartida(null);
+            setMensagemOlheiro('');
+            setResultadosOlheiro([]);
+            setTermoBusca('');
+            setTelaAtual('hub');
+          };
+
+          if (firebaseError) {
+             return (
+               <div className="min-h-screen bg-red-900 flex flex-col items-center justify-center p-6 text-white text-center font-mono">
+                 <h1 className="text-3xl font-bold mb-4 text-yellow-400">🚨 FIREBASE NÃO CONFIGURADO 🚨</h1>
+                 <p className="mb-4">O jogo requer um banco de dados para salvar seu progresso Rumo ao Hexa.</p>
+                 <p className="text-sm bg-black/30 p-4 rounded text-left">
+                   1. Crie um projeto no <a href="https://firebase.google.com/" target="_blank" className="text-blue-400 underline">Firebase</a>.<br/>
+                   2. Habilite o <b>Firestore Database</b> e a autenticação (Anônima).<br/>
+                   3. Abra este arquivo <code>index.html</code> num bloco de notas.<br/>
+                   4. Cole as suas chaves na variável <code>firebaseConfig</code> (linha ~28).
+                 </p>
+               </div>
+             )
+          }
+
+          if (loadingAuth || loadingGame) {
+            return (
+              <div className="min-h-screen bg-gray-900 flex items-center justify-center text-yellow-400 font-mono">
+                <p className="animate-pulse">A CARREGAR SISTEMA DA CBF...</p>
+              </div>
+            );
+          }
+
+          const Header = () => (
+            <div className="bg-yellow-400 text-gray-900 p-3 flex justify-between items-center font-bold border-b-4 border-green-800 shadow-md">
+              <div className="flex flex-col">
+                <span className="text-xl uppercase truncate max-w-[150px]">{gameState.nomeTreinador}</span>
+                <span className="text-xs">Técnico da Seleção</span>
+              </div>
+              <div className="text-right flex flex-col items-end">
+                <span>Mês {gameState.mes} / {gameState.ano}</span>
+                <div className="flex items-center gap-1 text-xs mt-1">
+                  <span>Aprovação:</span>
+                  <div className="w-20 h-3 bg-gray-900 rounded-sm overflow-hidden border border-gray-900">
+                    <div 
+                      className={`h-full transition-all duration-500 ${gameState.reputacao > 60 ? 'bg-green-500' : gameState.reputacao > 30 ? 'bg-yellow-500' : 'bg-red-500'}`} 
+                      style={{ width: `${gameState.reputacao}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+
+          const ModalCustomizado = ({ mensagem, aoFechar }) => (
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-900 border-4 border-yellow-400 p-6 max-w-sm w-full text-center shadow-2xl">
+                <div className="text-4xl mb-4">🚨</div>
+                <p className="text-white font-mono mb-6 text-lg">{mensagem}</p>
+                <button onClick={aoFechar} className="bg-yellow-400 text-black font-black p-3 w-full hover:bg-yellow-300">
+                  ENTENDIDO
+                </button>
+              </div>
+            </div>
+          );
+
+          if (telaAtual === 'intro') {
+            return (
+              <div className="min-h-screen bg-green-800 p-4 font-mono text-white flex flex-col justify-center items-center">
+                <div className="max-w-md w-full bg-gray-900 border-4 border-yellow-400 p-6 shadow-2xl">
+                  <h1 className="text-3xl font-black text-yellow-400 mb-4 text-center">RUMO AO HEXA 2030</h1>
+                  <p className="text-sm mb-4 leading-relaxed">
+                    Julho de 2026. A eliminação precoce na Copa causou um terremoto.
+                    A CBF em pânico decide apostar em um projeto totalmente novo. Você.
+                  </p>
+                  <form onSubmit={(e) => { e.preventDefault(); iniciarNovoJogo(e.target.nome.value); }}>
+                    <label className="block text-yellow-400 mb-2 font-bold">Qual o seu nome, Professor?</label>
+                    <input 
+                      name="nome" 
+                      required 
+                      autoComplete="off"
+                      className="w-full bg-gray-800 text-white border-2 border-yellow-400 p-3 mb-4 outline-none uppercase font-bold focus:bg-gray-700"
+                      placeholder="Ex: Tite, Felipão..."
+                    />
+                    <button type="submit" className="w-full bg-yellow-400 text-gray-900 font-black p-3 hover:bg-yellow-300 transition-transform active:scale-95">
+                      ASSINAR CONTRATO
+                    </button>
+                  </form>
+                </div>
+              </div>
+            );
+          }
+
+          if (telaAtual === 'hub') {
+            if (gameState.reputacao === 0) {
+              return (
+                <div className="min-h-screen bg-red-900 flex flex-col items-center justify-center p-4 font-mono text-white text-center">
+                  <h1 className="text-5xl text-yellow-400 mb-4 font-black">DEMITIDO!</h1>
+                  <p className="mb-6 text-lg">A pressão foi grande demais. A torcida pediu sua cabeça na Granja Comary.</p>
+                  <button onClick={() => iniciarNovoJogo(gameState.nomeTreinador)} className="bg-yellow-400 text-black px-6 py-4 font-black uppercase shadow-lg active:scale-95">
+                    Tentar Novamente (Voltar a 2026)
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div className="min-h-screen bg-gray-100 font-mono pb-20">
+                <Header />
+                
+                {modalAviso && <ModalCustomizado mensagem={modalAviso} aoFechar={() => setModalAviso(null)} />}
+
+                <div className="p-4 space-y-4 max-w-lg mx-auto">
+                  <div className="bg-white border-2 border-gray-300 p-4 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">⏳</div>
+                    <h2 className="text-green-800 font-bold mb-2">Calendário</h2>
+                    <button onClick={avanarMes} className="w-full bg-green-700 text-white font-black p-5 text-xl hover:bg-green-600 active:scale-95 transition-all shadow-md flex justify-center items-center gap-2">
+                      <span>AVANÇAR MÊS</span> <span className="text-2xl">⏩</span>
+                    </button>
+                  </div>
+
+                  <div className="bg-white border-2 border-gray-300 p-4 shadow-sm">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-green-800 font-bold text-lg">Centro de Inteligência</h2>
+                      <span className="text-sm bg-yellow-400 text-black px-2 py-1 font-black shadow-sm">
+                        CONVOCADOS: {gameState.convocados.length}/23
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => setTelaAtual('convocacao')} className="bg-blue-700 text-white font-bold p-3 hover:bg-blue-600 shadow flex flex-col items-center justify-center text-center active:scale-95 transition-transform">
+                        <span className="text-2xl mb-1">📋</span>
+                        <span className="text-sm">CONVOCAÇÃO</span>
+                      </button>
+                      
+                      <button onClick={() => setTelaAtual('olheiro')} className="bg-gray-800 text-yellow-400 font-bold p-3 hover:bg-gray-700 shadow flex flex-col items-center justify-center text-center active:scale-95 transition-transform">
+                        <span className="text-2xl mb-1">🔍</span>
+                        <span className="text-sm">BUSCAR JOGADOR</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {gameState.historico.length > 0 && (
+                    <div className="bg-white border-2 border-gray-300 p-4 shadow-sm">
+                      <h2 className="text-green-800 font-bold mb-3 flex items-center gap-2">
+                        <span>📰</span> Últimos Resultados
+                      </h2>
+                      <div className="space-y-2">
+                        {gameState.historico.slice(0,5).map((jogo, i) => (
+                          <div key={i} className="flex justify-between items-center text-sm border-b pb-2 border-gray-200">
+                            <span className="text-gray-500 text-xs w-14 font-semibold">{jogo.data}</span>
+                            <span className="font-bold flex-1 text-center truncate">Brasil {jogo.golsBr} x {jogo.golsAdv} {jogo.adversario}</span>
+                            <span className={`w-8 text-center font-black rounded text-white ${jogo.resultado === 'V' ? 'bg-green-500' : jogo.resultado === 'D' ? 'bg-red-500' : 'bg-gray-500'}`}>
+                              {jogo.resultado}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          if (telaAtual === 'olheiro') {
+            return (
+              <div className="min-h-screen bg-gray-100 font-mono flex flex-col">
+                <div className="bg-gray-800 text-yellow-400 p-3 flex justify-between items-center sticky top-0 shadow-md z-10">
+                  <button onClick={() => { setTelaAtual('hub'); setMensagemOlheiro(''); setResultadosOlheiro([]); }} className="font-bold p-2 bg-gray-900 rounded hover:bg-gray-700 active:scale-95 transition-transform">◀ VOLTAR</button>
+                  <h1 className="font-bold tracking-wider">C.I.G.A (OLHEIRO)</h1>
+                  <div className="w-16"></div>
+                </div>
+
+                <div className="flex-1 p-4 max-w-lg mx-auto w-full">
+                  <div className="bg-white border-2 border-gray-300 p-5 shadow-sm mb-4">
+                    <h2 className="text-green-800 font-black mb-2 text-lg">Radar de Talentos</h2>
+                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                      Não achou quem queria na base? Digite o nome (ex: "João", "Neymar") e o departamento de análise buscará no mercado.
+                    </p>
+
+                    <form onSubmit={buscarJogador} className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={termoBusca}
+                        onChange={(e) => setTermoBusca(e.target.value)}
+                        placeholder="Nome do jogador..." 
+                        className="flex-1 border-2 border-gray-300 p-3 font-bold text-gray-800 outline-none focus:border-blue-500" 
+                      />
+                      <button type="submit" className="bg-blue-700 text-white font-black px-6 hover:bg-blue-600 transition-colors active:scale-95">
+                        BUSCAR
+                      </button>
+                    </form>
+                  </div>
+
+                  {mensagemOlheiro && (
+                    <div className="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 text-gray-800 text-sm font-bold shadow-sm animate-fade-in-up">
+                      {mensagemOlheiro}
+                    </div>
+                  )}
+
+                  {resultadosOlheiro.length > 0 && (
+                    <div className="space-y-3 animate-fade-in-up">
+                      {resultadosOlheiro.map((jog, idx) => (
+                        <div key={idx} className="bg-white border-2 border-gray-300 p-4 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-xs font-black px-2 py-1 rounded text-white ${jog.pos === 'GOL' ? 'bg-orange-500' : jog.pos === 'ZAG' || jog.pos === 'LAT' ? 'bg-blue-500' : jog.pos === 'MEI' ? 'bg-green-600' : 'bg-red-500'}`}>
+                                {jog.pos}
+                              </span>
+                              <h3 className="font-bold text-lg text-gray-900 uppercase">{jog.nome}</h3>
+                            </div>
+                            <div className="text-sm text-gray-600 flex gap-4 font-semibold">
+                              <span>Idade: {jog.idade}</span>
+                              <span>OVR: <span className="text-blue-700 font-black">{jog.ovr}</span></span>
+                            </div>
+                            {jog.gerado && (
+                              <span className="text-[10px] bg-gray-200 text-gray-600 px-1 mt-1 inline-block uppercase">
+                                Perfil: {jog.gerado}
+                              </span>
+                            )}
+                          </div>
+                          <button 
+                            onClick={() => adicionarAoElenco(jog)}
+                            className="w-full sm:w-auto bg-green-600 text-white font-bold px-4 py-3 hover:bg-green-500 active:scale-95 transition-transform whitespace-nowrap"
+                          >
+                            + ADICIONAR
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          if (telaAtual === 'convocacao') {
+            const ordenados = [...gameState.jogadores].sort((a, b) => b.ovr - a.ovr);
+
+            return (
+              <div className="min-h-screen bg-gray-100 font-mono flex flex-col">
+                <div className="bg-blue-800 text-white p-3 flex justify-between items-center sticky top-0 shadow-md z-10">
+                  <button onClick={() => setTelaAtual('hub')} className="font-bold p-2 bg-blue-900 rounded hover:bg-blue-700 active:scale-95">◀ VOLTAR</button>
+                  <h1 className="font-bold tracking-wider">CONVOCAÇÃO</h1>
+                  <span className="bg-yellow-400 text-black px-2 py-1 font-black text-sm rounded-sm">
+                    {gameState.convocados.length}/23
+                  </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2 pb-20">
+                  <div className="bg-white border-2 border-gray-300 shadow-sm">
+                    <div className="flex bg-gray-200 p-3 font-black text-xs text-gray-700 border-b-2 border-gray-300">
+                      <div className="w-12">POS</div>
+                      <div className="flex-1">NOME DO ATLETA</div>
+                      <div className="w-10 text-center">IDD</div>
+                      <div className="w-10 text-center">OVR</div>
+                    </div>
+                    
+                    {ordenados.map(jogador => {
+                      const convocado = gameState.convocados.includes(jogador.id);
+                      return (
+                        <div 
+                          key={jogador.id} 
+                          onClick={() => alternarConvocacao(jogador.id)}
+                          className={`flex items-center p-3 border-b cursor-pointer transition-all text-sm
+                            ${convocado ? 'bg-green-100 border-green-300 shadow-inner' : 'bg-white hover:bg-gray-50 border-gray-100'}
+                          `}
+                        >
+                          <div className={`w-12 font-black ${jogador.pos === 'GOL' ? 'text-orange-600' : jogador.pos === 'ZAG' || jogador.pos === 'LAT' ? 'text-blue-600' : jogador.pos === 'MEI' ? 'text-green-700' : 'text-red-600'}`}>
+                            {jogador.pos}
+                          </div>
+                          <div className={`flex-1 font-bold truncate pr-2 uppercase ${convocado ? 'text-green-900' : 'text-gray-800'}`}>
+                            {convocado && <span className="mr-2 text-yellow-500 text-lg leading-none align-middle">★</span>}
+                            <span className="align-middle">{jogador.nome}</span>
+                          </div>
+                          <div className="w-10 text-center text-gray-500 font-semibold">{jogador.idade}</div>
+                          <div className="w-10 text-center font-black text-blue-900">{jogador.ovr}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (telaAtual === 'partida' && proximoAdversario) {
+            return (
+              <div className="min-h-screen bg-green-900 font-mono flex flex-col relative overflow-hidden">
+                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 20px, #fff 20px, #fff 40px)' }}></div>
+                
+                <Header />
+                
+                <div className="flex-1 p-4 flex flex-col items-center justify-center z-10">
+                  <div className="bg-gray-900 border-4 border-gray-300 w-full max-w-md p-6 text-white text-center shadow-2xl relative">
+                    <div className="absolute inset-0 border-2 border-white/5 m-2 rounded-full scale-150 pointer-events-none"></div>
+                    
+                    <h2 className="text-yellow-400 text-2xl font-black mb-1 tracking-wider">DIA DE JOGO</h2>
+                    <p className="text-xs text-gray-400 mb-8 uppercase tracking-widest bg-gray-800 inline-block px-3 py-1 rounded">{proximoAdversario.tipo}</p>
+                    
+                    <div className="flex justify-between items-center mb-10">
+                      <div className="flex-1">
+                        <div className="text-5xl mb-3 drop-shadow-lg">🇧🇷</div>
+                        <div className="font-black text-xl uppercase truncate text-yellow-400">Brasil</div>
+                      </div>
+                      <div className="px-4 text-3xl font-black text-gray-600">X</div>
+                      <div className="flex-1">
+                        <div className="text-5xl mb-3 drop-shadow-lg opacity-90">🏳️</div>
+                        <div className="font-black text-xl uppercase truncate text-white">{proximoAdversario.nome}</div>
+                      </div>
+                    </div>
+
+                    {!resultadoPartida ? (
+                      <button onClick={simularPartida} className="w-full bg-yellow-400 text-gray-900 font-black text-xl p-5 hover:bg-yellow-300 active:scale-95 animate-pulse shadow-[0_0_15px_rgba(250,204,21,0.5)] transition-all">
+                        APITAR O INÍCIO! ⚽
+                      </button>
+                    ) : (
+                      <div className="animate-fade-in-up">
+                        <div className="bg-black/40 p-6 rounded mb-6 border-2 border-white/10 backdrop-blur-sm">
+                          <div className="text-6xl font-black flex justify-center items-center gap-6 mb-2">
+                            <span className="text-yellow-400 drop-shadow-md">{resultadoPartida.golsBrasil}</span>
+                            <span className="text-gray-500 text-4xl font-light">-</span>
+                            <span className="text-white drop-shadow-md">{resultadoPartida.golsAdv}</span>
+                          </div>
+                          <div className="mt-4 text-sm font-black uppercase tracking-wider">
+                            {resultadoPartida.golsBrasil > resultadoPartida.golsAdv ? 
+                              <span className="text-green-400">VITÓRIA! A BANCADA FAZ A FESTA!</span> : 
+                             resultadoPartida.golsBrasil === resultadoPartida.golsAdv ? 
+                              <span className="text-yellow-200">EMPATE DURO. SEGUE O JOGO.</span> : 
+                              <span className="text-red-400">DERROTA. CRISE NA SELEÇÃO!</span>}
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center bg-gray-800 p-3 text-sm text-gray-300 mb-6 border border-gray-700 shadow-inner">
+                          <span className="font-bold">Aprovação da Torcida:</span>
+                          <span className={`font-black text-lg ${resultadoPartida.deltaReputacao > 0 ? 'text-green-400' : resultadoPartida.deltaReputacao < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                            {resultadoPartida.deltaReputacao > 0 ? '▲ +' : resultadoPartida.deltaReputacao < 0 ? '▼ ' : '▶ '}{resultadoPartida.deltaReputacao}
+                          </span>
+                        </div>
+
+                        <button onClick={voltarAoHub} className="w-full bg-blue-600 text-white font-black p-4 text-lg hover:bg-blue-500 active:scale-95 transition-transform shadow-lg">
+                          VOLTAR AO PAINEL
+                        </button>
+                      </div>
+                    )}
+                    
+                    {resultadoPartida?.erro && (
+                      <div className="mt-4 bg-red-600 text-white text-sm p-3 font-bold animate-bounce shadow-lg">
+                        ⚠️ {resultadoPartida.erro}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return null;
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
